@@ -1,0 +1,6 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {sealBytes,decryptBytes} from '../src/sealed.mjs';
+const password='synthetic encryption passphrase 123',bytes=new TextEncoder().encode('SIMULATED 私人记录及附件');
+test('encrypted records use authenticated encryption with fresh salts/nonces and recover exact bytes',async()=>{const first=await sealBytes(bytes,password,'test-vault'),second=await sealBytes(bytes,password,'test-vault');assert.notEqual(first.salt,second.salt);assert.notEqual(first.iv,second.iv);assert.notEqual(first.cipher,second.cipher);assert.deepEqual((await decryptBytes(first,password,'test-vault')).bytes,bytes);assert.ok(!JSON.stringify(first).includes('私人'));});
+test('wrong passwords, changed ciphertext, purpose substitution and oversized records fail without returning plaintext',async()=>{const envelope=await sealBytes(bytes,password,'test-vault');await assert.rejects(decryptBytes(envelope,'different strong passphrase','test-vault'),/密码错误/);await assert.rejects(decryptBytes({...envelope,cipher:(envelope.cipher[0]==='A'?'B':'A')+envelope.cipher.slice(1)},password,'test-vault'),/密码错误/);await assert.rejects(decryptBytes(envelope,password,'server-backup'),/用途/);await assert.rejects(decryptBytes(envelope,password,'test-vault',1),/大小/);await assert.rejects(sealBytes(bytes,'short','test-vault'),/12/);});

@@ -1,0 +1,79 @@
+import {check,text,uid,now,sha,first,rows,query,json} from './common.mjs';
+import {maximumQuantity,identifier,quantity,amount,code,scope,storedScope,scopeGuard,current,date,businessDay} from './lab.mjs';
+
+const units=['µL','mL','L','mg','g','kg','支','份','瓶','盒','包','个'];
+const guard=env=>[query(env,'INSERT INTO mutation_guard VALUES(changes())'),query(env,'DELETE FROM mutation_guard')];
+const workspaceName=access=>access.team?.name??'我的私有库存';
+function money(value){check(typeof value==='string'&&/^(?:0|[1-9]\d{0,8})(?:\.\d{1,2})?$/.test(value),'预计总额须为人民币十进制文本，最多两位小数，不能为负。');const [whole,fraction='']=value.split('.');return Number(whole)*100+Number(fraction.padEnd(2,'0'));}
+const moneyText=value=>Math.floor(value/100)+'.'+String(value%100).padStart(2,'0');
+const identityText=(value,maximum,label,required=false)=>text(value??'',maximum,label,required).trim().normalize('NFC');
+function metadata(input,identity=null){return {name:identityText(input.name,120,'试剂名称',true),manufacturer:identity?.manufacturer??identityText(input.manufacturer,200,'厂家'),catalogue:identity?.catalogue??identityText(input.catalogue,100,'货号'),lot:identity?.lot??identityText(input.lot,100,'批次',true),expires_on:date(input.expires_on,'有效期'),opened_on:date(input.opened_on,'开封日期'),storage:text(input.storage??'',200,'存放位置/条件'),notes:text(input.notes??'',4000,'备注')};}
+function alerts(lot,day=businessDay()){
+  const expires=JSON.parse(lot.metadata).expires_on,soon=new Date(Date.parse(day+'T00:00:00Z')+30*86400000).toISOString().slice(0,10);
+  return {low_stock:lot.quantity<=lot.minimum,expiry:!expires?'unknown':expires<day?'expired':expires===day?'today':expires<=soon?'soon':'valid',business_date:day};
+}
+function lotSummary(lot){const data=JSON.parse(lot.metadata);return {id:lot.id,code:lot.code,name:data.name,manufacturer:data.manufacturer,catalogue:data.catalogue,lot:data.lot,expires_on:data.expires_on,unit:lot.unit,quantity:amount(lot.quantity),minimum:amount(lot.minimum),revision:lot.revision,status:lot.status,alerts:alerts(lot)};}
+function requestSummary(record){return {id:record.id,team_id:record.team_id,creator:record.creator,...JSON.parse(record.doc),unit:record.unit,quantity:amount(record.quantity),received:amount(record.received),remaining:amount(record.quantity-record.received),estimated_total:moneyText(record.estimated_cents),currency:'CNY',status:record.status,revision:record.revision,created_at:record.created_at,updated_at:record.updated_at};}
+async function lotRow(env,user,id,write=false){const lot=await first(env,'SELECT * FROM inventory_lots WHERE id=?',identifier(id));check(lot,'库存不存在或没有权限。',404);return {lot,access:await storedScope(env,user,lot.scope,write)};}
+async function purchaseRow(env,user,id,write=false){const record=await first(env,'SELECT * FROM purchase_requests WHERE id=?',identifier(id));check(record,'采购申请不存在或没有权限。',404);return {record,access:await scope(env,user,record.team_id,write)};}
+function insertLot(env,lot){return query(env,'INSERT INTO inventory_lots VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',lot.id,lot.scope,lot.creator,lot.code,lot.unit,lot.quantity,lot.minimum,lot.metadata,lot.revision,lot.status,lot.created_at,lot.updated_at);}
+function updateLot(env,lot,previous){return [query(env,'UPDATE inventory_lots SET quantity=?,minimum=?,metadata=?,revision=?,status=?,updated_at=? WHERE id=? AND scope=? AND revision=?',lot.quantity,lot.minimum,lot.metadata,lot.revision,lot.status,lot.updated_at,lot.id,lot.scope,previous.revision),...guard(env)];}
+function updatePurchase(env,record,previous){return [query(env,'UPDATE purchase_requests SET received=?,status=?,revision=?,updated_at=? WHERE id=? AND revision=?',record.received,record.status,record.revision,record.updated_at,record.id,previous.revision),...guard(env)];}
+function lotEvent(env,user,lot,kind,delta,reason,purchaseId=null){return query(env,'INSERT INTO inventory_events VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',uid(),lot.id,user.id,user.display_name||user.username,lot.revision,kind,delta,lot.quantity,JSON.stringify({...lotSummary(lot),metadata:JSON.parse(lot.metadata)}),reason,purchaseId,now());}
+function purchaseEvent(env,user,record,kind,reason,relatedId=null){return query(env,'INSERT INTO purchase_events VALUES(?,?,?,?,?,?,?,?,?)',uid(),record.id,user.id,user.display_name||user.username,record.revision,kind,JSON.stringify({...requestSummary(record),related_id:relatedId}),reason,now());}
+async function lotView(env,user,id){
+  const {lot,access}=await lotRow(env,user,id),events=await rows(env,'SELECT id,owner,actor_name,revision,kind,delta,balance,data,reason,purchase_id,created_at FROM inventory_events WHERE lot_id=? ORDER BY revision',lot.id);
+  return {...lotSummary(lot),...JSON.parse(lot.metadata),workspace:workspaceName(access),team_id:access.team?.id??null,role:access.role,events:events.map(event=>({...event,delta:amount(event.delta),balance:amount(event.balance),data:JSON.parse(event.data)})),receipts:(await rows(env,'SELECT id,purchase_id,reference,quantity,created_at FROM inventory_receipts WHERE lot_id=? ORDER BY created_at',lot.id)).map(item=>({...item,quantity:amount(item.quantity)}))};
+}
+async function purchaseView(env,user,id){
+  const {record,access}=await purchaseRow(env,user,id);return {...requestSummary(record),workspace:workspaceName(access),role:access.role,events:(await rows(env,'SELECT id,owner,actor_name,revision,kind,data,reason,created_at FROM purchase_events WHERE purchase_id=? ORDER BY revision',id)).map(event=>({...event,data:JSON.parse(event.data)})),receipts:(await rows(env,'SELECT inventory_receipts.id,lot_id,inventory_lots.code,reference,inventory_receipts.quantity,inventory_receipts.created_at FROM inventory_receipts JOIN inventory_lots ON inventory_lots.id=lot_id WHERE purchase_id=? ORDER BY inventory_receipts.created_at',id)).map(item=>({...item,quantity:amount(item.quantity)}))};
+}
+export async function inventoryRoute(env,user,path,payload){
+  const input=payload??{};
+  if(path==='/api/inventory')return json({user_id:user.id,units,business_date:businessDay(),workspaces:[{team_id:null,name:'我的私有库存',role:'owner'},...await rows(env,`SELECT teams.id AS team_id,teams.name,team_members.role FROM teams JOIN team_members ON team_id=teams.id JOIN users founder ON founder.id=teams.owner WHERE user_id=? AND founder.disabled=0 ORDER BY teams.created_at DESC`,user.id)]});
+  if(path==='/api/inventory/list'){
+    const access=await scope(env,user,input.team_id),search=text(input.q??'',200,'搜索词').trim().toLowerCase(),state=input.status??'active',alert=input.alert??'all';check(['active','archived','all'].includes(state)&&['all','low','expired','soon','unknown'].includes(alert),'筛选条件无效。');
+    const lots=(await rows(env,'SELECT * FROM inventory_lots WHERE scope=? ORDER BY updated_at DESC',access.key)).filter(lot=>(state==='all'||lot.status===state)&&(!search||(lot.code+lot.metadata).toLowerCase().includes(search))).map(lotSummary).filter(lot=>{if(alert==='all')return true;if(alert==='low')return lot.alerts.low_stock;if(alert==='soon')return ['soon','today'].includes(lot.alerts.expiry);return lot.alerts.expiry===alert;});
+    return json({workspace:workspaceName(access),role:access.role,lots,purchases:access.team?(await rows(env,'SELECT * FROM purchase_requests WHERE team_id=? ORDER BY updated_at DESC',access.team.id)).map(requestSummary):[],business_date:businessDay()});
+  }
+  if(path==='/api/inventory/create'){
+    const access=await scope(env,user,input.team_id,true);check(!access.team||input.consent===true,'请确认向整个团队登记试剂资料。');check(units.includes(input.unit),'库存单位无效。');const created=now(),lot={id:uid(),scope:access.key,creator:user.id,code:code(input.code),unit:input.unit,quantity:quantity(input.quantity,input.unit),minimum:quantity(input.minimum??'0',input.unit),metadata:JSON.stringify(metadata(input)),revision:1,status:'active',created_at:created,updated_at:created};
+    await env.DB.batch([...scopeGuard(env,user,access),insertLot(env,lot),lotEvent(env,user,lot,'create',lot.quantity,'首次登记，数量为人工申报。')]);return json(await lotView(env,user,lot.id));
+  }
+  if(path==='/api/inventory/detail'||path==='/api/inventory/archive'){const lot=await lotView(env,user,input.id);return json(path.endsWith('/archive')?{schema:'colorlens-inventory-lot-1',exported_at:now(),notice:'单批次台账与流水，不是整个空间备份或财务凭证。',lot}:lot);}
+  if(path==='/api/inventory/action'){
+    const {lot:previous,access}=await lotRow(env,user,input.id,true);current(previous,input.revision);const action=input.action,reason=text(input.reason,2000,'操作原因',true).trim(),lot={...previous,revision:previous.revision+1,updated_at:now()};
+    check(['consume','add','correct','edit','dispose','retire','restore'].includes(action),'库存操作无效。');check(previous.status==='active'||action==='restore','已归档，须先恢复。',409);
+    if(action==='restore'){check(previous.status==='archived','只有归档批次可以恢复。',409);lot.status='active';}
+    else if(action==='edit'){lot.metadata=JSON.stringify(metadata(input,JSON.parse(previous.metadata)));lot.minimum=quantity(input.minimum??'0',previous.unit);}
+    else if(action==='retire'){check(previous.quantity===0,'余量须为零才能归档；请先记录实际领用、报废或盘点。');lot.status='archived';}
+    else{if(action==='consume')check(alerts(previous).expiry!=='expired','登记有效期已过，不允许作为正常领用；可记录报废或核对标签。');const value=quantity(input.quantity,previous.unit);check(action==='correct'||value>0,'变化量须大于零。');lot.quantity=action==='correct'?value:previous.quantity+(['consume','dispose'].includes(action)?-value:value);check(lot.quantity>=0&&lot.quantity<=maximumQuantity,'变化量超出余量或数量上限。');check(lot.quantity!==previous.quantity,'数量没有改变。');}
+    await env.DB.batch([...scopeGuard(env,user,access),...updateLot(env,lot,previous),lotEvent(env,user,lot,action,lot.quantity-previous.quantity,reason)]);return json(await lotView(env,user,lot.id));
+  }
+  if(path==='/api/inventory/purchase-create'){
+    check(input.team_id!==undefined&&input.team_id!==null,'采购申请须属于团队。');const access=await scope(env,user,input.team_id,true);check(access.role==='editor','本阶段由团队编辑者申请、负责人独立审批，不支持负责人自批或代申请。',403);check(input.consent===true,'请确认向整个团队提交采购资料和预计总额。');check(units.includes(input.unit),'采购单位无效。');const total=quantity(input.quantity,input.unit);check(total>0,'采购数量须大于零。');const reason=text(input.reason,2000,'采购原因',true).trim(),created=now(),record={id:uid(),team_id:access.team.id,creator:user.id,doc:JSON.stringify({name:identityText(input.name,120,'品名',true),manufacturer:identityText(input.manufacturer,200,'厂家'),catalogue:identityText(input.catalogue,100,'货号'),supplier:identityText(input.supplier,200,'供应商'),justification:reason,notes:text(input.notes??'',4000,'采购备注')}),unit:input.unit,quantity:total,received:0,estimated_cents:money(input.estimated_total),status:'pending',revision:1,created_at:created,updated_at:created};
+    await env.DB.batch([...scopeGuard(env,user,access),query(env,'INSERT INTO purchase_requests VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',record.id,record.team_id,user.id,record.doc,record.unit,record.quantity,0,record.estimated_cents,record.status,1,created,created),purchaseEvent(env,user,record,'create',reason)]);return json(await purchaseView(env,user,record.id));
+  }
+  if(path==='/api/inventory/purchase'||path==='/api/inventory/purchase-archive'){const purchase=await purchaseView(env,user,input.id);return json(path.endsWith('-archive')?{schema:'colorlens-purchase-1',exported_at:now(),notice:'单份采购台账及到货记录，不是实际订单、付款或财务凭证；不包含各批次全部库存流水。',purchase}:purchase);}
+  if(path==='/api/inventory/purchase-action'){
+    const {record:previous,access}=await purchaseRow(env,user,input.id,true);current(previous,input.revision);const action=input.action,reason=text(input.reason,2000,'审批/操作说明',true).trim(),record={...previous,revision:previous.revision+1,updated_at:now()};
+    if(['approve','reject'].includes(action)){check(access.role==='owner'&&record.creator!==user.id,'只有负责人可审批他人的申请。',403);check(record.status==='pending','只有待审批申请可以审批。',409);record.status=action==='approve'?'approved':'rejected';}
+    else if(action==='cancel'){check(access.role==='owner'||record.creator===user.id,'只能取消自己的申请或由负责人取消。',403);check(['pending','approved'].includes(record.status)&&record.received===0,'只能取消尚未到货的待审批/已批准申请。',409);record.status='cancelled';}
+    else if(action==='close'){check(access.role==='owner','只有负责人可关闭未到货余量。',403);check(record.status==='partial','只有分批到货中的申请可关闭余量。',409);record.status='closed';}
+    else check(action==='comment','采购操作无效。');
+    await env.DB.batch([...scopeGuard(env,user,access),...updatePurchase(env,record,previous),purchaseEvent(env,user,record,action,reason)]);return json(await purchaseView(env,user,record.id));
+  }
+  if(path==='/api/inventory/receive'){
+    const {record:previous,access}=await purchaseRow(env,user,input.id,true),reference=code(input.reference),receivedQuantity=quantity(input.quantity,previous.unit),reason=text(input.reason,2000,'到货说明',true).trim();check(receivedQuantity>0,'到货数量须大于零。');
+    const newData=input.lot_id?null:{code:code(input.code),lot:identityText(input.lot,100,'到货批次',true),expires_on:date(input.expires_on,'有效期'),minimum:quantity(input.minimum??'0',previous.unit),storage:text(input.storage??'',200,'存放条件'),notes:text(input.notes??'',4000,'批次备注')},targetId=input.lot_id?identifier(input.lot_id):null;
+    const fingerprint=await sha(JSON.stringify({id:previous.id,reference,quantity:receivedQuantity,reason,lot_id:targetId,new_lot:newData})),existing=await first(env,'SELECT * FROM inventory_receipts WHERE purchase_id=? AND reference=?',previous.id,reference);
+    if(existing){check(existing.fingerprint===fingerprint,'该到货编号已经用于另一组数据，不能重复入库或改写；请核对原记录。',409);return json({replayed:true,purchase:await purchaseView(env,user,previous.id),lot:await lotView(env,user,existing.lot_id)});}
+    current(previous,input.revision);check(['approved','partial'].includes(previous.status),'须先审批，且申请仍有待收货余量。',409);check(receivedQuantity<=previous.quantity-previous.received,'本次到货超过批准的未到货余量。');const doc=JSON.parse(previous.doc),created=now();let lot,previousLot;
+    if(targetId){const found=await lotRow(env,user,targetId,true);previousLot=found.lot;check(previousLot.scope===access.key,'到货只能进入申请所在团队。',403);current(previousLot,input.lot_revision);check(previousLot.status==='active'&&previousLot.unit===previous.unit,'目标批次须在使用中，且与申请单位相同。');const identity=JSON.parse(previousLot.metadata),normalize=value=>value.trim().normalize('NFC').toUpperCase();check(normalize(identity.manufacturer)===normalize(doc.manufacturer)&&normalize(identity.catalogue)===normalize(doc.catalogue)&&(doc.catalogue||normalize(identity.name)===normalize(doc.name)),'目标厂家/货号或无货号时的品名与申请不符。');lot={...previousLot,quantity:previousLot.quantity+receivedQuantity,revision:previousLot.revision+1,updated_at:created};check(lot.quantity<=maximumQuantity,'入库后超过数量上限。');}
+    else lot={id:uid(),scope:access.key,creator:user.id,code:newData.code,unit:previous.unit,quantity:receivedQuantity,minimum:newData.minimum,metadata:JSON.stringify(metadata({...doc,...newData,opened_on:''})),revision:1,status:'active',created_at:created,updated_at:created};
+    const receiptId=uid(),record={...previous,received:previous.received+receivedQuantity,revision:previous.revision+1,updated_at:created};record.status=record.received===record.quantity?'received':'partial';
+    await env.DB.batch([...scopeGuard(env,user,access),...updatePurchase(env,record,previous),...previousLot?updateLot(env,lot,previousLot):[insertLot(env,lot)],lotEvent(env,user,lot,'receive',receivedQuantity,reason,record.id),purchaseEvent(env,user,record,'receive',reason,receiptId),query(env,'INSERT INTO inventory_receipts VALUES(?,?,?,?,?,?,?,?)',receiptId,record.id,lot.id,user.id,reference,fingerprint,receivedQuantity,created)]);
+    return json({replayed:false,purchase:await purchaseView(env,user,record.id),lot:await lotView(env,user,lot.id)});
+  }
+  check(false,'接口不存在。',404);
+}

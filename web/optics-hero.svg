@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="840" height="580" viewBox="0 0 840 580" fill="none">
+ <title>镜析光学观察示意</title>
+ <desc>一块透明反应孔板和放大观察窗，琥珀色溶液从深到浅排列。这是品牌示意图，不是真实测量。</desc>
+ <defs>
+  <linearGradient id="plate" x1="80" y1="80" x2="590" y2="350" gradientUnits="userSpaceOnUse"><stop stop-color="#fff" stop-opacity=".98"/><stop offset=".46" stop-color="#e6eefb" stop-opacity=".9"/><stop offset="1" stop-color="#c3d2e9" stop-opacity=".85"/></linearGradient>
+  <linearGradient id="edge" x1="110" y1="290" x2="620" y2="410" gradientUnits="userSpaceOnUse"><stop stop-color="#91a7c8"/><stop offset=".5" stop-color="#e8f1ff"/><stop offset="1" stop-color="#8296bb"/></linearGradient>
+  <radialGradient id="well"><stop stop-color="#ffe1a1"/><stop offset=".48" stop-color="#f6b351"/><stop offset=".79" stop-color="#c6772c"/><stop offset=".92" stop-color="#995122"/><stop offset="1" stop-color="#e9bd77"/></radialGradient>
+  <radialGradient id="lens"><stop stop-color="#eac187"/><stop offset=".58" stop-color="#dd9b49"/><stop offset=".87" stop-color="#ba6d34"/><stop offset="1" stop-color="#8c563a"/></radialGradient>
+  <linearGradient id="rim" x1="420" y1="40" x2="695" y2="300" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset=".2" stop-color="#bfcef3"/><stop offset=".42" stop-color="#edf4ff"/><stop offset=".7" stop-color="#7998cd"/><stop offset=".86" stop-color="#c6b9e8"/><stop offset="1" stop-color="#f0d0ac"/></linearGradient>
+  <linearGradient id="shine" x1="454" y1="70" x2="650" y2="285" gradientUnits="userSpaceOnUse"><stop stop-color="#fff" stop-opacity=".65"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <radialGradient id="ground"><stop stop-color="#7491bc" stop-opacity=".28"/><stop offset="1" stop-color="#7491bc" stop-opacity="0"/></radialGradient>
+  <filter id="shadow" x="-30%" y="-30%" width="160%" height="180%"><feDropShadow dx="0" dy="22" stdDeviation="16" flood-color="#587297" flood-opacity=".2"/></filter>
+  <g id="cell"><ellipse rx="25" ry="20" fill="#aebed6"/><ellipse cy="-3" rx="25" ry="20" fill="#f5f8ff"/><ellipse cy="-2" rx="20" ry="16" fill="url(#well)"/><path d="M-15-7C-10-15 4-18 12-10" stroke="#fff5db" stroke-width="2" stroke-linecap="round" opacity=".72"/><ellipse cy="3" rx="15" ry="8" stroke="#f9e0af" stroke-opacity=".35"/></g>
+  <g id="row"><use href="#cell" x="0"/><use href="#cell" x="64"/><use href="#cell" x="128"/><use href="#cell" x="192" opacity=".83"/><use href="#cell" x="256" opacity=".7"/><use href="#cell" x="320" opacity=".55"/><use href="#cell" x="384" opacity=".42"/><use href="#cell" x="448" opacity=".28"/></g>
+ </defs>
+ <ellipse cx="414" cy="450" rx="343" ry="111" fill="url(#ground)"/>
+ <g transform="translate(95 162) rotate(-12 280 160)" filter="url(#shadow)">
+  <path d="M0 30Q0 8 22 8H550Q574 8 574 30V291Q574 314 550 314H23Q0 314 0 291Z" fill="url(#edge)" stroke="#c9d6e9"/>
+  <rect y="-6" width="574" height="296" rx="26" fill="url(#plate)" stroke="#fff" stroke-width="2"/>
+  <rect x="18" y="12" width="538" height="260" rx="16" stroke="#b9cbe1" stroke-opacity=".8"/>
+  <g transform="translate(63 57)"><use href="#row"/><use href="#row" y="58"/><use href="#row" y="116"/><use href="#row" y="174"/></g>
+  <path d="M16 283H555" stroke="#fff" stroke-opacity=".8"/>
+ </g>
+ <path d="M414 322 517 235" stroke="#5b7ba6" stroke-width="1.5" stroke-dasharray="4 7"/>
+ <circle cx="415" cy="321" r="39" stroke="#2b5fc7" stroke-width="2"/>
+ <path d="M379 298v-10h10m53 0h10v10m0 47v10h-10m-53 0h-10v-10" stroke="#2b5fc7" stroke-width="2" stroke-linecap="round"/>
+ <g filter="url(#shadow)">
+  <circle cx="595" cy="162" r="139" fill="url(#rim)"/>
+  <circle cx="595" cy="162" r="131" stroke="#fff" stroke-opacity=".65" stroke-width="1.4"/>
+  <circle cx="595" cy="162" r="119" fill="#a77852"/>
+  <circle cx="595" cy="160" r="114" fill="url(#lens)" stroke="#eac087" stroke-width="2"/>
+  <circle cx="595" cy="162" r="123" stroke="#537eac" stroke-opacity=".45" stroke-width="2"/>
+  <circle cx="595" cy="162" r="114" fill="url(#shine)"/>
+  <path d="M517 109c25-37 75-48 111-30" stroke="#fff" stroke-opacity=".65" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="565" cy="116" r="3" fill="#fff7da" fill-opacity=".8"/><circle cx="648" cy="195" r="5" fill="#f5d8a5" fill-opacity=".5"/><circle cx="558" cy="205" r="2.5" fill="#fff7da" fill-opacity=".7"/>
+  <path d="M595 146v-12m0 56v-12m16-16h12m-56 0h12" stroke="#fff" stroke-opacity=".8" stroke-width="1.4"/>
+ </g>
+ <g transform="translate(148 468)"><rect width="253" height="4" rx="2" fill="#d0ddee"/><rect width="42" height="4" rx="2" fill="#bc7837"/><rect x="46" width="42" height="4" rx="2" fill="#d89541"/><rect x="92" width="42" height="4" rx="2" fill="#eab35c"/><rect x="138" width="42" height="4" rx="2" fill="#f0ca7b"/><rect x="184" width="42" height="4" rx="2" fill="#f5dda8"/></g>
+</svg>

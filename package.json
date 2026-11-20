@@ -1,0 +1,25 @@
+{
+  "name": "colorlens-cloud",
+  "version": "0.10.0-preview.19",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.10.0"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/dev.mjs",
+    "preview:v10": "node scripts/preview-v05.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "fflate": "0.8.2",
+    "ws": "8.21.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "wrangler": "4.147.0"
+  },
+  "description": "镜析 ColorLens 是支持免手动采集的实验记录与数据分析工作台。",
+  "license": "MIT"
+}

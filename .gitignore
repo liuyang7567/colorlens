@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.local/
+.wrangler/
+qa/
+runtime/
+*.env
+.env.*
+!.env.example
+*.log
+*.sqlite*
+*.dpapi
+*.key
+*.pem
+*.exe
+*.dll
+*.zip

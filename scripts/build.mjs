@@ -1,0 +1,17 @@
+import {build} from 'esbuild';
+import {mkdir,copyFile,readdir,writeFile} from 'node:fs/promises';
+import path from 'node:path';
+import {createHash} from 'node:crypto';
+import {readFile} from 'node:fs/promises';
+const root=path.resolve(import.meta.dirname,'..'),output=path.join(root,'dist','pages');
+await mkdir(output,{recursive:true});
+for(const name of await readdir(path.join(root,'web')))if(/\.(html|css|svg|js|webp)$/.test(name))await copyFile(path.join(root,'web',name),path.join(output,name));
+await copyFile(path.join(root,'web','third-party-notices.txt'),path.join(output,'third-party-notices.txt'));
+await mkdir(path.join(output,'samples'),{recursive:true});
+await copyFile(path.join(root,'samples','simulated_tubes_5.png'),path.join(output,'samples','simulated_tubes_5.png'));
+for(const name of ['cloud','share','report','download','offline'])await build({entryPoints:[path.join(root,'web',name+'.mjs')],outfile:path.join(output,name+'.js'),bundle:true,format:'iife',platform:'browser',target:'es2022',legalComments:'none'});
+const offlineHash=createHash('sha256');for(const name of ['offline.html','offline.css','offline.js'])offlineHash.update(await readFile(path.join(output,name)));
+await writeFile(path.join(output,'offline-worker.js'),(await readFile(path.join(root,'web','offline-worker.js'),'utf8')).replace('__COLORLENS_OFFLINE_VERSION__',offlineHash.digest('hex').slice(0,16)));
+await build({entryPoints:[path.join(root,'src','worker.mjs')],outfile:path.join(output,'_worker.js'),bundle:true,format:'esm',platform:'browser',target:'es2022',legalComments:'none'});
+await writeFile(path.join(output,'_routes.json'),JSON.stringify({version:1,include:['/*'],exclude:[]}));
+console.log('Built ColorLens 0.10.0-preview.19');

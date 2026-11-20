@@ -1,0 +1,14 @@
+﻿sample_id,role,well,od,reference_od,standard_concentration
+Blank,blank,A1,0.08,,
+Blank,blank,A2,0.086,,
+STD-1,standard,A3,0.2189,,25
+STD-1,standard,A4,0.2249,,25
+STD-2,standard,A5,0.3578,,50
+STD-2,standard,A6,0.3638,,50
+STD-3,standard,A7,0.6356,,100
+STD-3,standard,A8,0.6416,,100
+STD-4,standard,A9,1.1911,,200
+STD-4,standard,A10,1.1971,,200
+Sample-A,sample,B1,0.52,,
+Sample-A,sample,B2,0.53,,
+Sample-A,sample,B3,0.68,,

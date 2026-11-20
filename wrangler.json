@@ -1,0 +1,9 @@
+{
+  "name": "colorlens",
+  "pages_build_output_dir": "dist/pages",
+  "compatibility_date": "2026-10-19",
+  "vars": {
+    "DEEPSEEK_MODEL": "deepseek-flash"
+  },
+  "d1_databases": []
+}
